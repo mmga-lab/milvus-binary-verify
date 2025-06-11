@@ -1,0 +1,46 @@
+# Python bytecode files
+__pycache__/
+*.py[cod]
+
+# Virtual environment directories
+env/
+venv/
+.venv/
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# Pip
+pip-wheel-metadata/
+pip-log.txt
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.cache/
+pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE specific files
+.vscode/
+.idea/
+
+# macOS system files
+.DS_Store
+
+# Logs
+*.log
+
+# Database files
+*.sqlite3
+*.db
+
+# Milvus binary artifacts
+bin/
+*.tar.gz
+*.tgz
