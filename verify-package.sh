@@ -7,6 +7,13 @@
 
 set -euo pipefail
 
+# Detect if the script is running as root. If not, prefix privileged commands with sudo.
+if [[ $(id -u) -eq 0 ]]; then
+  SUDO=""
+else
+  SUDO="sudo"
+fi
+
 PKG_PATH=${1:-}
 BINARY=${2:-}
 
@@ -18,16 +25,16 @@ fi
 # Detect package type by file extension
 if [[ "$PKG_PATH" == *.deb ]]; then
   echo "Detected DEB package: $PKG_PATH"
-  sudo apt-get update -y
+  $SUDO apt-get update -y
   # Try to install; if dependencies are missing, apt-get -f install resolves them.
-  sudo dpkg -i "$PKG_PATH" || sudo apt-get -f install -y
+  $SUDO dpkg -i "$PKG_PATH" || $SUDO apt-get -f install -y
 elif [[ "$PKG_PATH" == *.rpm ]]; then
   echo "Detected RPM package: $PKG_PATH"
   # Ensure yum/dnf exists – older CentOS uses yum, newer may have dnf.
   if command -v dnf >/dev/null 2>&1; then
-    sudo dnf -y install "$PKG_PATH"
+    $SUDO dnf -y install "$PKG_PATH"
   else
-    sudo yum -y localinstall "$PKG_PATH"
+    $SUDO yum -y localinstall "$PKG_PATH"
   fi
 else
   echo "Unsupported package format: $PKG_PATH"

@@ -44,3 +44,4 @@ pytest_cache/
 bin/
 *.tar.gz
 *.tgz
+milvus-debug-logs

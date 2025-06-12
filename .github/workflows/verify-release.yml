@@ -1,0 +1,96 @@
+# GitHub Action: Verify Milvus release binary
+# 当 GitHub Release 发布后，自动下载最新的 release asset（.deb 或 .rpm）
+# 并使用 repo 中的 verify-package.sh 脚本进行验证。
+# Workflow 亦可手动触发。
+
+name: Verify Release Binary
+
+on:
+  # 每当发布新的 Release 时触发
+  release:
+    types: [created, edited]
+  # 允许手动触发
+  workflow_dispatch:
+
+
+jobs:
+  verify-deb:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install tooling (curl, jq)
+        run: sudo apt-get update -y && sudo apt-get install -y curl jq
+
+      - name: Download latest .deb asset from release
+        id: download
+        env:
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          API_URL="https://api.github.com/repos/${REPO}/releases/latest"
+          ASSET_URL=$(curl -sSL -H "Authorization: token ${GH_TOKEN}" "${API_URL}" \
+            | jq -r '.assets[] | select(.name | endswith(".deb")) | .url' | head -n 1)
+          if [[ -z "${ASSET_URL}" ]]; then
+            echo "No .deb asset found in latest release" >&2
+            exit 1
+          fi
+          FILE_NAME=$(basename "${ASSET_URL}")
+          echo "Downloading ${FILE_NAME}…"
+          curl -L -H "Authorization: token ${GH_TOKEN}" -H "Accept: application/octet-stream" \
+            "${ASSET_URL}" -o "${FILE_NAME}"
+          echo "file=${FILE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify package with verify-package.sh (root)
+        run: |
+          sudo chmod +x verify-package.sh
+          sudo ./verify-package.sh "${{ steps.download.outputs.file }}" milvus
+
+  verify-rpm:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        centos_version: [8, 9]
+    container:
+      image: centos:${{ matrix.centos_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install tooling (curl, jq)
+        run: |
+          if command -v dnf >/dev/null 2>&1; then
+            dnf -y install curl jq
+          else
+            yum -y install curl jq
+          fi
+
+      - name: Download latest .rpm asset from release
+        id: download
+        env:
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          API_URL="https://api.github.com/repos/${REPO}/releases/latest"
+          ASSET_URL=$(curl -sSL -H "Authorization: token ${GH_TOKEN}" "${API_URL}" \
+            | jq -r '.assets[] | select(.name | endswith(".rpm")) | .url' | head -n 1)
+          if [[ -z "${ASSET_URL}" ]]; then
+            echo "No .rpm asset found in latest release" >&2
+            exit 1
+          fi
+          FILE_NAME=$(basename "${ASSET_URL}")
+          echo "Downloading ${FILE_NAME}…"
+          curl -L -H "Authorization: token ${GH_TOKEN}" -H "Accept: application/octet-stream" \
+            "${ASSET_URL}" -o "${FILE_NAME}"
+          echo "file=${FILE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify package with verify-package.sh
+        run: |
+          chmod +x verify-package.sh
+          ./verify-package.sh "${{ steps.download.outputs.file }}" milvus
