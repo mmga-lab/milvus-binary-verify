@@ -15,10 +15,18 @@ on:
 
 jobs:
   verify-deb:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
+        include:
+          - runner: ubuntu-22.04
+            arch: amd64
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+          - runner: ubuntu-24.04-arm  
+            arch: arm64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,36 +34,49 @@ jobs:
       - name: Install tooling (curl, jq)
         run: sudo apt-get update -y && sudo apt-get install -y curl jq
 
-      - name: Download latest .deb asset from release
+      - name: Download architecture-specific .deb asset from release
         id: download
         env:
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           API_URL="https://api.github.com/repos/${REPO}/releases/latest"
           ASSET_URL=$(curl -sSL -H "Authorization: token ${GH_TOKEN}" "${API_URL}" \
-            | jq -r '.assets[] | select(.name | endswith(".deb")) | .url' | head -n 1)
+            | jq -r --arg arch "${ARCH}" '.assets[] | select(.name | endswith(".deb") and contains($arch)) | .url' | head -n 1)
           if [[ -z "${ASSET_URL}" ]]; then
-            echo "No .deb asset found in latest release" >&2
+            echo "No .deb asset found for ${ARCH} architecture in latest release" >&2
             exit 1
           fi
           FILE_NAME=$(basename "${ASSET_URL}")
-          echo "Downloading ${FILE_NAME}…"
+          echo "Downloading ${FILE_NAME} for ${ARCH}…"
           curl -L -H "Authorization: token ${GH_TOKEN}" -H "Accept: application/octet-stream" \
             "${ASSET_URL}" -o "${FILE_NAME}"
           echo "file=${FILE_NAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify package with verify-package.sh (root)
+      - name: Verify package with verify-package.sh
         run: |
           sudo chmod +x verify-package.sh
           sudo ./verify-package.sh "${{ steps.download.outputs.file }}" milvus
 
   verify-rpm:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        centos_version: [8, 9]
+        include:
+          - runner: ubuntu-latest
+            centos_version: 8
+            arch: amd64
+          - runner: ubuntu-latest  
+            centos_version: 9
+            arch: amd64
+          - runner: ubuntu-22.04-arm
+            centos_version: 8
+            arch: arm64
+          - runner: ubuntu-22.04-arm
+            centos_version: 9  
+            arch: arm64
     container:
       image: centos:${{ matrix.centos_version }}
     steps:
@@ -70,22 +91,23 @@ jobs:
             yum -y install curl jq
           fi
 
-      - name: Download latest .rpm asset from release
+      - name: Download architecture-specific .rpm asset from release
         id: download
         env:
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           API_URL="https://api.github.com/repos/${REPO}/releases/latest"
           ASSET_URL=$(curl -sSL -H "Authorization: token ${GH_TOKEN}" "${API_URL}" \
-            | jq -r '.assets[] | select(.name | endswith(".rpm")) | .url' | head -n 1)
+            | jq -r --arg arch "${ARCH}" '.assets[] | select(.name | endswith(".rpm") and contains($arch)) | .url' | head -n 1)
           if [[ -z "${ASSET_URL}" ]]; then
-            echo "No .rpm asset found in latest release" >&2
+            echo "No .rpm asset found for ${ARCH} architecture in latest release" >&2
             exit 1
           fi
           FILE_NAME=$(basename "${ASSET_URL}")
-          echo "Downloading ${FILE_NAME}…"
+          echo "Downloading ${FILE_NAME} for ${ARCH}…"
           curl -L -H "Authorization: token ${GH_TOKEN}" -H "Accept: application/octet-stream" \
             "${ASSET_URL}" -o "${FILE_NAME}"
           echo "file=${FILE_NAME}" >> "$GITHUB_OUTPUT"

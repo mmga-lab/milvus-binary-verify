@@ -41,6 +41,13 @@ else
   exit 3
 fi
 
+# Start the Milvus service if systemctl is available
+if command -v systemctl >/dev/null 2>&1; then
+  echo "Starting Milvus service..."
+  $SUDO systemctl start milvus
+  echo "Milvus service started."
+fi
+
 # Verify the binary is available in PATH
 if command -v "$BINARY" >/dev/null 2>&1; then
   echo "$BINARY found in PATH – installation succeeded."
